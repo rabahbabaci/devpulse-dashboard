@@ -37,7 +37,9 @@ Create `.env.local`:
 GITHUB_TOKEN=your_github_personal_access_token
 ```
 
-This token is optional for public repos but recommended for higher rate limits.
+This token is optional for public repos but strongly recommended because GitHub unauthenticated requests are rate-limited very quickly.
+
+If you see a rate-limit error in the UI, set `GITHUB_TOKEN` in `.env.local` and restart `npm run dev`.
 
 ## Architecture (high-level)
 

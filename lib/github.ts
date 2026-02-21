@@ -29,9 +29,19 @@ function headers() {
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { headers: headers(), next: { revalidate: 3600 } });
+
   if (!res.ok) {
-    throw new Error(`GitHub API error ${res.status}: ${await res.text()}`);
+    const body = await res.text();
+
+    if (res.status === 403 && body.toLowerCase().includes("rate limit")) {
+      throw new Error(
+        "GitHub API rate limit reached. Add GITHUB_TOKEN to .env.local and restart the app to continue."
+      );
+    }
+
+    throw new Error(`GitHub API error ${res.status}: ${body}`);
   }
+
   return res.json();
 }
 

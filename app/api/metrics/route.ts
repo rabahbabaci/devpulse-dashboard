@@ -1,16 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRepoMetrics } from "@/lib/github";
 
-export async function GET(request: NextRequest) {
-  const repo = request.nextUrl.searchParams.get("repo") || "vercel/next.js";
-  const [owner, name] = repo.split("/");
+function normalizeRepoInput(raw: string): { owner: string; repo: string } | null {
+  const input = raw.trim();
+  if (!input) return null;
 
-  if (!owner || !name) {
-    return NextResponse.json({ error: "Use format owner/repo" }, { status: 400 });
+  let candidate = input;
+
+  // Accept full GitHub URLs like:
+  // https://github.com/owner/repo or github.com/owner/repo(.git)
+  const urlLike = candidate.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i);
+  if (urlLike) {
+    candidate = urlLike[1] || "";
+  }
+
+  candidate = candidate.replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+
+  const parts = candidate.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const owner = parts[0];
+  const repo = parts[1];
+
+  if (!owner || !repo) return null;
+  return { owner, repo };
+}
+
+export async function GET(request: NextRequest) {
+  const repoParam = request.nextUrl.searchParams.get("repo") || "vercel/next.js";
+  const parsed = normalizeRepoInput(repoParam);
+
+  if (!parsed) {
+    return NextResponse.json(
+      { error: "Use owner/repo or a full GitHub repo URL" },
+      { status: 400 }
+    );
   }
 
   try {
-    const data = await getRepoMetrics(owner, name);
+    const data = await getRepoMetrics(parsed.owner, parsed.repo);
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(

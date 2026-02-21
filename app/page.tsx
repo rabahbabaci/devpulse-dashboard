@@ -55,7 +55,11 @@ export default function Home() {
       <p className="helper">Quickly evaluate delivery consistency and issue flow for any public GitHub repo.</p>
 
       <div className="form">
-        <input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="owner/repo" />
+        <input
+          value={repo}
+          onChange={(e) => setRepo(e.target.value)}
+          placeholder="owner/repo or https://github.com/owner/repo"
+        />
         <button onClick={() => load()} disabled={loading}>{loading ? "Loading..." : "Analyze repo"}</button>
       </div>
 

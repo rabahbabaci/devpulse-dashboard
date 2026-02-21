@@ -7,14 +7,23 @@ function normalizeRepoInput(raw: string): { owner: string; repo: string } | null
 
   let candidate = input;
 
-  // Accept full GitHub URLs like:
-  // https://github.com/owner/repo or github.com/owner/repo(.git)
-  const urlLike = candidate.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i);
-  if (urlLike) {
-    candidate = urlLike[1] || "";
+  // If input contains a full GitHub URL anywhere, prefer that segment.
+  // Handles malformed strings like: owner/https://github.com/owner/repo
+  const embeddedUrl = candidate.match(/github\.com\/([^\s]+)/i);
+  if (embeddedUrl?.[1]) {
+    candidate = embeddedUrl[1];
   }
 
-  candidate = candidate.replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  // Also support direct URL input: https://github.com/owner/repo
+  const urlLike = candidate.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i);
+  if (urlLike?.[1]) {
+    candidate = urlLike[1];
+  }
+
+  candidate = candidate
+    .replace(/\.git$/i, "")
+    .replace(/[?#].*$/, "")
+    .replace(/^\/+|\/+$/g, "");
 
   const parts = candidate.split("/").filter(Boolean);
   if (parts.length < 2) return null;

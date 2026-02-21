@@ -8,6 +8,8 @@ export type RepoMetrics = {
   issueFlow: { week: string; opened: number; closed: number }[];
 };
 
+type WeekBucket = { key: string; label: string };
+
 const API = "https://api.github.com";
 
 type GitHubIssue = {
@@ -33,8 +35,15 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-function fmtWeek(date: Date) {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+function weekStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - date.getUTCDay()));
+}
+
+function bucketForDate(date: Date): WeekBucket {
+  const ws = weekStart(date);
+  const key = ws.toISOString().slice(0, 10); // YYYY-MM-DD for stable sorting
+  const label = `${ws.getUTCMonth() + 1}/${ws.getUTCDate()}`;
+  return { key, label };
 }
 
 export async function getRepoMetrics(owner: string, repo: string): Promise<RepoMetrics> {
@@ -44,39 +53,41 @@ export async function getRepoMetrics(owner: string, repo: string): Promise<RepoM
     fetchJson(`${API}/repos/${owner}/${repo}/issues?state=all&per_page=100`)
   ]);
 
-  const commitBuckets = new Map<string, number>();
+  const commitBuckets = new Map<string, { label: string; commits: number }>();
   for (const c of commits) {
     const d = new Date(c.commit.author.date);
-    const week = fmtWeek(new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay()));
-    commitBuckets.set(week, (commitBuckets.get(week) || 0) + 1);
+    const bucket = bucketForDate(d);
+    const prev = commitBuckets.get(bucket.key) || { label: bucket.label, commits: 0 };
+    prev.commits += 1;
+    commitBuckets.set(bucket.key, prev);
   }
 
-  const issueBuckets = new Map<string, { opened: number; closed: number }>();
+  const issueBuckets = new Map<string, { label: string; opened: number; closed: number }>();
   for (const i of (issues as GitHubIssue[]).filter((x) => !x.pull_request)) {
     const created = new Date(i.created_at);
-    const cw = fmtWeek(new Date(created.getFullYear(), created.getMonth(), created.getDate() - created.getDay()));
-    const c = issueBuckets.get(cw) || { opened: 0, closed: 0 };
+    const createdBucket = bucketForDate(created);
+    const c = issueBuckets.get(createdBucket.key) || { label: createdBucket.label, opened: 0, closed: 0 };
     c.opened += 1;
-    issueBuckets.set(cw, c);
+    issueBuckets.set(createdBucket.key, c);
 
     if (i.closed_at) {
       const closed = new Date(i.closed_at);
-      const clw = fmtWeek(new Date(closed.getFullYear(), closed.getMonth(), closed.getDate() - closed.getDay()));
-      const cc = issueBuckets.get(clw) || { opened: 0, closed: 0 };
+      const closedBucket = bucketForDate(closed);
+      const cc = issueBuckets.get(closedBucket.key) || { label: closedBucket.label, opened: 0, closed: 0 };
       cc.closed += 1;
-      issueBuckets.set(clw, cc);
+      issueBuckets.set(closedBucket.key, cc);
     }
   }
 
   const commitFrequency = [...commitBuckets.entries()]
-    .map(([week, commits]) => ({ week, commits }))
-    .sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime())
-    .slice(-12);
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-12)
+    .map(([, v]) => ({ week: v.label, commits: v.commits }));
 
   const issueFlow = [...issueBuckets.entries()]
-    .map(([week, v]) => ({ week, opened: v.opened, closed: v.closed }))
-    .sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime())
-    .slice(-12);
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-12)
+    .map(([, v]) => ({ week: v.label, opened: v.opened, closed: v.closed }));
 
   return {
     fullName: repoData.full_name,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -43,6 +43,11 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    load("vercel/next.js");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main>
